@@ -41,30 +41,128 @@ library SafeMath {
 // abstract contract: 추상 컨트랙트로 contract의 구현된 기능과 interface의 추상화 기능 모두를 포함.
 // abstract contract는 만약 실제 contract에서 사용하지 않는다면 추상으로 표시되어 사용되지 않습니다.
 abstract contract OwnerHelper {
-  	address private _owner;
+    // 제안서 -> 투표 -> 투표가 누적 3이면 결과 발표 & 반영
+    // proposal
+    // 제안서 제출자는 찬성 & emit transfer or add.
+    // proposal -> struct -> {type: {transfer or add}, id: uint, from: , to: }
+    
+    // vote의 input으로는 proposal id, agree or disagree
+    // vote 내부에서 check
+    
+    // proposals
+    event proposalEvent (uint id, ProposalType proposalType, address from, address to);
 
+    enum ProposalType {
+      TRANSFER, ADD
+    }
+
+    enum ProposalStatus {
+      PROPOSAL_PENDING, PROPOSAL_WIN, PROPOSAL_LOSE
+    }
+
+    enum VoteStatus {
+      VOTE_PENDING, VOTE_DISAGREE, VOTE_AGREE
+    }
+
+    struct Proposal {
+      uint8 proposalType;
+      address from;
+      address to;
+      ProposalStatus proposalStatus;
+    }
+
+    mapping(uint => Proposal) Proposals;
+    mapping(uint => mapping(address => VoteStatus)) votes;
+    uint proposalsLen = 0;
+
+    function proposeOwner(ProposalType _proposalType, address from, address to) isValidOwner public {
+      require(_proposalType == ProposalType.TRANSFER || (ProposalType.ADD == 1 && from == address(0)));
+      Proposals[proposalsLen] = Proposal({
+        proposalType: _proposalType,
+        from: from,
+        to: to,
+        proposalStatus: ProposalStatus.PROPOSAL_PENDING
+      });
+      votes[proposalsLen][msg.sender] = VoteStatus.VOTE_AGREE;
+      uint proposalId = proposalsLen;
+      proposalsLen ++;
+      emit proposalEvent(proposalId, _proposalType, from, to);
+    }
+
+    event voteDone(uint id, Proposal proposal)
+
+    function vote(uint id, VoteStatus _vote) isValidOwner public {
+      // 조건 성립시
+      emit voteDone(id, )
+    }
+
+    // 문제 1. 한사람이 여러번 vote할 수 없도록 막아야함
+    // 문제 2. vote를 다 했는지 체크
+    // 문제 3. 한 proposal이 마무리 되야 넘어갈 수 있어야함
+    // 방향성 -> proposal을 mapping 하지 않고, 그때 그때 처리 -> proposal id 불요 & status를 통해서 초기화할지 말지 결정.
+  	
+    
+    address[3] private _owner;
   	event OwnershipTransferred(address indexed preOwner, address indexed nextOwner);
 
-  	modifier onlyOwner {
-			require(msg.sender == _owner, "OwnerHelper: caller is not owner");
+    function isOwner(address _addr) view private returns(bool) {
+      bool flag = false;
+      for(uint i = 0; i<3; i++){
+        if(_addr == _owner[i]){
+          flag = true;
+        }
+      }
+      return flag;
+    }
+
+  	modifier isValidOwner {
+      bool flag = isOwner(msg.sender);
+			require(flag == true, "OwnerHelper: caller is not owner");
 			_;
   	}
 
+    // 새로운 오너가 유효한지 검사하는 수정자
+    modifier isValidNewOwner (address newOwner) {
+      require(isOwner(newOwner) == false);
+      require(newOwner != address(0x0));
+      _;
+    }
+
   	constructor() {
-      _owner = msg.sender;
+      _owner[0] = msg.sender;
   	}
 
-    function owner() public view virtual returns (address) {
+    function owner() public view virtual returns (address[3] memory) {
       return _owner;
     }
 
-  	function transferOwnership(address newOwner) onlyOwner public {
-      require(newOwner != _owner);
-      require(newOwner != address(0x0));
-      address preOwner = _owner;
-	    _owner = newOwner;
-	    emit OwnershipTransferred(preOwner, newOwner);
+    // 기존의 오너와 새로운 오너로 변경
+  	function transferOwnership(address oldOwner, address newOwner) isValidOwner isValidNewOwner(newOwner) public {
+      require(isOwner(oldOwner));
+      require(!isOwner(newOwner));
+      
+      uint idx = 0;
+      while(idx < 3){
+        if(_owner[idx] == oldOwner){
+          break;
+        }
+        idx++;
+      }
+      _owner[idx] = newOwner;
+	    emit OwnershipTransferred(oldOwner, newOwner);
   	}
+
+    // 새로운 오너 추가
+    function addOwner(address newOwner) isValidOwner isValidNewOwner(newOwner) public{
+      uint i =0;
+      for(i = 0; i< 3; i++){
+        if(_owner[i] == address(0)) {
+          _owner[i] = newOwner;
+          break;
+        }
+      }
+      require(i!=3,"Already Full");
+    }
 }
 
 contract SimpleToken is ERC20Interface, OwnerHelper {
@@ -180,12 +278,22 @@ contract SimpleToken is ERC20Interface, OwnerHelper {
         }
     }
 
-    function removeTokenLock() onlyOwner public {
+    function lockToken() isValidOwner public {
+      require(_tokenLock == false);
+      _tokenLock = true;
+    }
+
+    function lockPersonalToken(address _who) isValidOwner public{
+      require(_personalTokenLock[_who] == false);
+      _personalTokenLock[_who] = true;
+    }
+
+    function removeTokenLock() isValidOwner public {
       require(_tokenLock == true);
       _tokenLock = false;
     }
 
-    function removePersonalTokenLock(address _who) onlyOwner public {
+    function removePersonalTokenLock(address _who) isValidOwner public {
       require(_personalTokenLock[_who] == true);
       _personalTokenLock[_who] = false;
     }
