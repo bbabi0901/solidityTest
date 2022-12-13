@@ -23,6 +23,7 @@ abstract contract OwnerHelper {
   	}
 }
 
+// IssuerHelper에서는 Issuer를 추가하고 삭제하는 기능이 존재합니다. 추가하고 삭제하는 기능은 onlyOwner로 제한되어 Owner만 컨트롤이 가능합니다.
 abstract contract issuerHelper is OwnerHelper {
     mapping(address => bool) public issuers;
 
@@ -62,6 +63,7 @@ contract CredentialBox is issuerHelper {
     mapping(uint8 => string) private alumniEnum;
     mapping(uint8 => string) private statusEnum;
 
+    // claimCredential에서 block.timestamp를 활용해 크리덴셜을 클레임한 시간을 크리덴셜에 저장할 수 있습니다.
     struct Credential{
         uint256 id;
         address issuer;
@@ -87,7 +89,7 @@ contract CredentialBox is issuerHelper {
         credential.issuer = msg.sender;
         credential.alumniType = _alumniType;
         credential.statusType = 0;
-        credential.value = value;
+        credential.value = _value;
         credential.createDate = block.timestamp;
 
         idCount++;
@@ -95,10 +97,15 @@ contract CredentialBox is issuerHelper {
         return true;
     }
     
-    function getCredential(address _alumniAddress) public view returns(string memory) {
+    function getCredential(address _alumniAddress) public view returns(Credential memory) {
         return credentials[_alumniAddress];
     }
 
+/*
+솔리디티 내부에는 String을 검사하는 두 가지 방법이 있습니다.
+첫 번째는 bytes로 변환하여 길이로 null인지 검사하는 방법, 두 번째는 keccak256 함수를 사용하여 두 스트링을 해쉬로 변환하여 비교하는 방법입니다. 
+위의 코드에서는 첫 번째 방법을 이용하여 내부 alumniEnum의 Type이 중복되는 타입이 존재하는지 검사했습니다.
+*/
     function addAlumniType(uint8 _type, string calldata _value) onlyIssuer public returns(bool) {
         require(bytes(alumniEnum[_type]).length == 0);
         alumniEnum[_type] = _value;
@@ -110,7 +117,7 @@ contract CredentialBox is issuerHelper {
     }
 
     function addStatusType(uint8 _type, string calldata _value) onlyIssuer public returns(bool) {
-        require(bytes(statusEnum[_type].length == 0));
+        require(bytes(statusEnum[_type]).length == 0);
         statusEnum[_type] = _value;
         return true;
     }
